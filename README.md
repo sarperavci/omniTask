@@ -3,24 +3,23 @@
 ## Overview
 OmniTask is a powerful Python-based workflow automation tool that enables the creation and execution of dynamic task chains. It provides a flexible framework for building complex workflows with features like task dependencies, output chaining, and dynamic task loading.
 
-## Project Structure
-```
-OmniTask/
-├── src/
-│   ├── core/
-│   │   ├── task.py         # Base Task class and core functionality
-│   │   ├── workflow.py     # Workflow management and execution
-│   │   └── registry.py     # Task registration and discovery
-│   ├── models/
-│   │   └── task_result.py  # Task result data structure
-│   └── utils/
-│       └── path_parser.py  # Path parsing utilities
-├── tasks/
-│   ├── read_file.py       # File reading task
-│   ├── http_task.py       # HTTP request task
-│   └── print_task.py      # Output printing task
-└── main.py                # Main application entry point
-```
+
+## Examples
+
+### Text Processing Workflow
+A simple example demonstrating text file processing with multiple tasks:
+- File operations (read/write)
+- Text statistics counting
+- Text case conversion
+
+[View Text Processing Example](examples/text_processing/README.md)
+
+The example shows:
+- Task dependency management
+- Output chaining between tasks
+- Error handling
+- Task configuration
+- Workflow execution
 
 ## Core Components
 
