@@ -1,0 +1,39 @@
+name: text_processing_demo
+
+tasks:
+  create_file:
+    type: file_ops
+    config:
+      operation: write
+      file_path: demo.txt
+      content: "Hello! This is a demo of OmniTask.\nIt shows how tasks can work together."
+
+  read_file:
+    type: file_ops
+    config:
+      operation: read
+      file_path: demo.txt
+
+  count_stats:
+    type: count
+    config: {}
+
+  make_uppercase:
+    type: uppercase
+    config: {}
+
+  save_uppercase:
+    type: file_ops
+    config:
+      operation: write
+      file_path: uppercase.txt
+
+dependencies:
+  read_file:
+    - create_file
+  count_stats:
+    - read_file
+  make_uppercase:
+    - read_file
+  save_uppercase:
+    - make_uppercase 

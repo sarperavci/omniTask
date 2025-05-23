@@ -3,6 +3,42 @@
 ## Overview
 OmniTask is a powerful Python-based workflow automation tool that enables the creation and execution of dynamic task chains. It provides a flexible framework for building complex workflows with features like task dependencies, output chaining, and dynamic task loading.
 
+## Workflow Templates
+OmniTask supports defining workflows using YAML or JSON templates, making it easier to create and maintain workflows without writing Python code.
+
+### Template Format
+```yaml
+name: my_workflow
+
+tasks:
+  task1:
+    type: task_type
+    config:
+      param1: value1
+      param2: value2
+
+  task2:
+    type: another_task_type
+    config:
+      param3: value3
+
+dependencies:
+  task2:
+    - task1
+```
+
+### Using Templates
+```python
+from omniTask.core.template import WorkflowTemplate
+from omniTask.core.registry import TaskRegistry
+
+registry = TaskRegistry()
+registry.load_tasks_from_directory("tasks")
+
+template = WorkflowTemplate("workflow.yaml")
+workflow = template.create_workflow(registry)
+result = await workflow.run()
+```
 
 ## Examples
 
@@ -20,6 +56,7 @@ The example shows:
 - Error handling
 - Task configuration
 - Workflow execution
+- Workflow templates
 
 ## Core Components
 
@@ -126,11 +163,13 @@ async def main():
    - Use meaningful task names
    - Consider error handling and recovery
    - Monitor execution times
+   - Use templates for complex workflows
 
 3. **Configuration**
    - Use configuration for flexible task behavior
    - Document configuration options
    - Provide sensible defaults
+   - Use templates for consistent configuration
 
 4. **Output Handling**
    - Use consistent output formats
@@ -157,21 +196,26 @@ The system provides several levels of error handling:
    - Provides clear error messages for missing outputs
    - Handles relative path errors gracefully
 
+4. **Template Level**
+   - Validates template structure
+   - Provides clear error messages for invalid templates
+   - Handles missing or invalid task configurations
+
 ## Future Enhancements
 
 1. **Planned Features**
-   - Parallel task execution
-   - Task retry mechanisms
-   - Workflow persistence
-   - Enhanced monitoring and logging
-   - Task timeout handling
+   - [ ] Parallel task execution
+   - [ ] Task retry mechanisms
+   - [ ] Workflow persistence
+   - [ ] Enhanced monitoring and logging
+   - [ ] Task timeout handling
 
 2. **Potential Improvements**
-   - Web interface for workflow management
-   - Task scheduling capabilities
-   - Enhanced error recovery
-   - Workflow templates
-   - Plugin system for custom tasks
+   - [ ] Web interface for workflow management
+   - [ ] Task scheduling capabilities
+   - [ ] Enhanced error recovery
+   - [x] Workflow templates
+   - [ ] Plugin system for custom tasks
 
 ## Contributing
 
@@ -199,9 +243,10 @@ pip install omniTask
 
 ```python
 import asyncio
-from omniTask import Workflow, TaskRegistry
+from omniTask import Workflow, TaskRegistry, WorkflowTemplate
 
 async def main():
+    # Using Python code
     registry = TaskRegistry()
     workflow = Workflow("my_workflow", registry)
     
@@ -209,5 +254,10 @@ async def main():
     workflow.register_function(my_function)
     task = workflow.create_function_task("my_function", "task1")
     
+    result = await workflow.run()
+
+    # Or using templates
+    template = WorkflowTemplate("workflow.yaml")
+    workflow = template.create_workflow(registry)
     result = await workflow.run()
 ```
