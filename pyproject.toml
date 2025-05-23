@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "omniTask"
-version = "0.2.0"
+version = "0.3.0"
 description = "A powerful Python-based workflow automation tool"
 readme = "README.md"
 authors = [
