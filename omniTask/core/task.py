@@ -117,11 +117,22 @@ class Task(ABC):
 
         if path.startswith("prev"):
             steps_back = 1
+            remaining_path = ""
+            
             if len(path) > 4:
-                try:
-                    steps_back = int(path[4:])
-                except ValueError:
-                    raise ValueError(f"Invalid relative path: {path}")
+                dot_index = path.find('.')
+                if dot_index != -1:
+                    steps_back_str = path[4:dot_index]
+                    remaining_path = path[dot_index + 1:]
+                    try:
+                        steps_back = int(steps_back_str) if steps_back_str else 1
+                    except ValueError:
+                        raise ValueError(f"Invalid relative path: {path}")
+                else:
+                    try:
+                        steps_back = int(path[4:])
+                    except ValueError:
+                        raise ValueError(f"Invalid relative path: {path}")
             
             if not self.dependency_order:
                 raise ValueError("No dependencies available for relative path")
@@ -130,7 +141,6 @@ class Task(ABC):
                 raise ValueError(f"Not enough previous tasks for path: {path}")
             
             task_name = self.dependency_order[-steps_back]
-            remaining_path = path[4 + len(str(steps_back)):].lstrip('.')
             path = f"{task_name}.{remaining_path}" if remaining_path else task_name
 
         parts = path.split('.')
