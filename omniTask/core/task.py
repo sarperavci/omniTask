@@ -6,6 +6,8 @@ import pkg_resources
 import subprocess
 import sys
 import re
+import asyncio
+from datetime import datetime
 
 from ..models.task_result import TaskResult
 
@@ -15,10 +17,12 @@ class TaskStatus(Enum):
     COMPLETED = "completed"
     FAILED = "failed"
     SKIPPED = "skipped"
+    TIMEOUT = "timeout"
 
 class Task(ABC):
     task_name: str = None
     library_dependencies: Set[str] = set()
+    default_timeout: Optional[float] = None
 
     def __init__(self, name: str, config: Dict[str, Any] = None):
         if not self.task_name:
@@ -31,6 +35,21 @@ class Task(ABC):
         self.dependency_outputs: Dict[str, Dict[str, Any]] = {}
         self.dependency_order: List[str] = []
         self.logger = logging.getLogger(f"task.{name}")
+        self.timeout = self.config.get('timeout', self.default_timeout)
+
+    async def execute_with_timeout(self) -> TaskResult:
+        if self.timeout is None:
+            return await self.execute()
+
+        try:
+            return await asyncio.wait_for(self.execute(), timeout=self.timeout)
+        except asyncio.TimeoutError:
+            self.logger.error(f"Task {self.name} timed out after {self.timeout} seconds")
+            return TaskResult(
+                success=False,
+                output={},
+                error=TimeoutError(f"Task execution timed out after {self.timeout} seconds")
+            )
 
     @classmethod
     def ensure_dependencies(cls) -> None:

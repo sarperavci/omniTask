@@ -95,11 +95,15 @@ class Workflow:
                     raise ValueError(f"Dependency task {dep_name} did not complete successfully")
                 task.dependency_outputs[dep_name] = dep_task.result.output
 
-            result = await task.execute()
+            result = await task.execute_with_timeout()
             if not isinstance(result.output, dict):
                 raise ValueError(f"Task {task.name} must return a dictionary as output")
                 
-            task.status = TaskStatus.COMPLETED if result.success else TaskStatus.FAILED
+            if isinstance(result.error, TimeoutError):
+                task.status = TaskStatus.TIMEOUT
+            else:
+                task.status = TaskStatus.COMPLETED if result.success else TaskStatus.FAILED
+                
             result.execution_time = (datetime.now() - start_time).total_seconds()
             task.result = result
             return result
@@ -148,12 +152,14 @@ class Workflow:
             }
             task.dependency_order = self.execution_order[:self.execution_order.index(task_name)]
             start_time = time.time()
-            result = await task.execute()
+            result = await task.execute_with_timeout()
             execution_time = time.time() - start_time
             result.execution_time = execution_time
             results[task_name] = result
+            
             if not result.success:
-                self.logger.error(f"Task {task_name} failed: {result.error}")
+                error_type = "timeout" if isinstance(result.error, TimeoutError) else "error"
+                self.logger.error(f"Task {task_name} failed with {error_type}: {result.error}")
                 break
         
         return results 

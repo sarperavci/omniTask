@@ -7,26 +7,31 @@ tasks:
       operation: write
       file_path: demo.txt
       content: "Hello! This is a demo of OmniTask.\nIt shows how tasks can work together."
+      timeout: 5.0
 
   read_file:
     type: file_ops
     config:
       operation: read
       file_path: demo.txt
+      timeout: 2.0
 
   count_stats:
     type: count
-    config: {}
+    config:
+      timeout: 1.0
 
   make_uppercase:
     type: uppercase
-    config: {}
+    config:
+      timeout: 1.0
 
   save_uppercase:
     type: file_ops
     config:
       operation: write
       file_path: uppercase.txt
+      timeout: 5.0
 
 dependencies:
   read_file:

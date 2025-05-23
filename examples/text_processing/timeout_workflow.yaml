@@ -1,0 +1,16 @@
+name: timeout_test_workflow
+
+tasks:
+  timeout_task:
+    type: timeout_test
+    config:
+      timeout: 2.0
+
+  normal_task:
+    type: count
+    config:
+      timeout: 1.0
+
+dependencies:
+  normal_task:
+    - timeout_task 
