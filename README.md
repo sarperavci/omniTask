@@ -35,8 +35,8 @@ The task system is built around the `Task` base class, which provides the founda
 
 #### Example Task Implementation:
 ```python
-from src.core.task import Task
-from src.models.task_result import TaskResult
+from omniTask.core.task import Task
+from omniTask.models.task_result import TaskResult
 # do not import anything else here
 
 class CustomTask(Task):
@@ -87,8 +87,8 @@ The `Workflow` class manages task execution and dependency resolution.
 #### Example Workflow Creation:
 ```python
 import asyncio
-from src.core.workflow import Workflow
-from src.core.registry import TaskRegistry
+from omniTask.core.workflow import Workflow
+from omniTask.core.registry import TaskRegistry
 
 async def main():
     # Create registry and load tasks
