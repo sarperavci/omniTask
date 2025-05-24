@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="omniTask",
-    version="0.3.1",
+    version="0.4.0",
     packages=find_packages(),
     install_requires=[],
     author="SARPER AVCI",
