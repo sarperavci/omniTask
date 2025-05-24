@@ -1,0 +1,24 @@
+name: bug_bounty_workflow
+
+tasks:
+  subdomain_scanner:
+    type: subdomain_scanner
+    config:
+      target: example.com
+
+  url_checker:
+    type: url_checker
+    for_each: subdomain_scanner.subdomains
+    config_template:
+      url: $.url
+      timeout: 5
+    max_concurrent: 5
+
+  result_analyzer:
+    type: result_analyzer
+    config:
+      analysis_type: "url_status"
+
+dependencies:
+  result_analyzer:
+    - url_checker

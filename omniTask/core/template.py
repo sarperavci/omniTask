@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 from .workflow import Workflow
 from .registry import TaskRegistry
+from ..models.task_group import TaskGroupConfig
 
 class WorkflowTemplate:
     def __init__(self, template_path: str):
@@ -39,6 +40,9 @@ class WorkflowTemplate:
             if not isinstance(task_config, dict):
                 raise ValueError(f"Invalid task configuration for {task_name}")
 
+            if 'for_each' in task_config:
+                continue
+
             task_type = task_config.get('type')
             if not task_type:
                 raise ValueError(f"Task {task_name} must specify a type")
@@ -46,9 +50,43 @@ class WorkflowTemplate:
             config = task_config.get('config', {})
             task = workflow.create_task(task_type, task_name, config)
 
+            task_deps = task_config.get('dependencies', [])
             if task_name in dependencies:
-                for dep in dependencies[task_name]:
-                    task.add_dependency(dep)
+                task_deps.extend(dependencies[task_name])
+            
+            for dep in task_deps:
+                if dep in tasks and 'for_each' in tasks[dep]:
+                    if dep not in workflow.task_groups:
+                        group_config = tasks[dep]
+                        group = TaskGroupConfig(
+                            type=group_config.get('type'),
+                            for_each=group_config.get('for_each'),
+                            config_template=group_config.get('config_template', {}),
+                            max_concurrent=group_config.get('max_concurrent', 10),
+                            error_handling=group_config.get('error_handling')
+                        )
+                        workflow.add_task_group(dep, group)
+                task.add_dependency(dep)
+
+        for group_name, group_config in tasks.items():
+            if not isinstance(group_config, dict):
+                continue
+
+            if 'for_each' not in group_config:
+                continue
+
+            if group_name not in workflow.task_groups:
+                if not isinstance(group_config.get('for_each'), str):
+                    raise ValueError(f"Task group {group_name} must specify a valid for_each path")
+
+                group = TaskGroupConfig(
+                    type=group_config.get('type'),
+                    for_each=group_config.get('for_each'),
+                    config_template=group_config.get('config_template', {}),
+                    max_concurrent=group_config.get('max_concurrent', 10),
+                    error_handling=group_config.get('error_handling')
+                )
+                workflow.add_task_group(group_name, group)
 
         return workflow
 

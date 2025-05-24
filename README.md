@@ -1,7 +1,7 @@
 # OmniTask Documentation
 
 ## Overview
-OmniTask is a powerful Python-based workflow automation tool that enables the creation and execution of dynamic task chains. It provides a flexible framework for building complex workflows with features like task dependencies, output chaining, and dynamic task loading.
+OmniTask is a powerful Python-based workflow automation tool that enables the creation and execution of dynamic task chains. It provides a flexible framework for building complex workflows with features like task dependencies, output chaining, dynamic task loading, and dynamic task groups.
 
 ## Workflow Templates
 OmniTask supports defining workflows using YAML or JSON templates, making it easier to create and maintain workflows without writing Python code.
@@ -19,8 +19,10 @@ tasks:
 
   task2:
     type: another_task_type
-    config:
-      param3: value3
+    for_each: task1.output.items
+    config_template:
+      param3: $.value
+    max_concurrent: 5
 
 dependencies:
   task2:
@@ -42,6 +44,14 @@ result = await workflow.run()
 
 ## Examples
 
+### Bug Bounty Workflow
+A comprehensive example demonstrating dynamic task groups and parallel execution:
+- Subdomain discovery
+- URL status checking with parallel execution
+- Result analysis and aggregation
+
+[View Bug Bounty Example](examples/mock-bounty/README.md)
+
 ### Text Processing Workflow
 A simple example demonstrating text file processing with multiple tasks:
 - File operations (read/write)
@@ -49,14 +59,6 @@ A simple example demonstrating text file processing with multiple tasks:
 - Text case conversion
 
 [View Text Processing Example](examples/text_processing/README.md)
-
-The example shows:
-- Task dependency management
-- Output chaining between tasks
-- Error handling
-- Task configuration
-- Workflow execution
-- Workflow templates
 
 ## Core Components
 
@@ -74,7 +76,6 @@ The task system is built around the `Task` base class, which provides the founda
 ```python
 from omniTask.core.task import Task
 from omniTask.models.task_result import TaskResult
-# do not import anything else here
 
 class CustomTask(Task):
     task_name = "custom_task"
@@ -90,6 +91,26 @@ class CustomTask(Task):
         }
         
         return TaskResult(success=True, output=result)
+```
+
+### Dynamic Task Groups
+OmniTask supports dynamic task groups that can create and execute multiple tasks based on input data.
+
+#### Features:
+- **For-Each Execution**: Create tasks for each item in a list
+- **Parallel Execution**: Control concurrent task execution
+- **Template Configuration**: Use templates for task configuration
+- **Output Aggregation**: Combine results from multiple tasks
+
+#### Example Task Group Configuration:
+```yaml
+task_group:
+  type: url_checker
+  for_each: subdomain_scanner.subdomains
+  config_template:
+    url: $.url
+    timeout: 5
+  max_concurrent: 5
 ```
 
 ### Task Registry
@@ -120,6 +141,7 @@ The `Workflow` class manages task execution and dependency resolution.
 - **Execution Order**: Automatic determination of task execution order
 - **Output Chaining**: Automatic passing of task outputs to dependent tasks
 - **Error Handling**: Graceful handling of task failures
+- **Dynamic Task Groups**: Support for creating and managing dynamic task groups
 
 #### Example Workflow Creation:
 ```python
@@ -128,21 +150,16 @@ from omniTask.core.workflow import Workflow
 from omniTask.core.registry import TaskRegistry
 
 async def main():
-    # Create registry and load tasks
     registry = TaskRegistry()
     registry.load_tasks_from_source("tasks")
     
-    # Create workflow with registry
     workflow = Workflow("my_workflow", registry)
     
-    # Create tasks directly through workflow
     task1 = workflow.create_task("task1", "instance1", {"config": "value"})
     task2 = workflow.create_task("task2", "instance2")
     
-    # Set dependencies
     task2.add_dependency("instance1")
     
-    # Run workflow
     result = await workflow.run()
 ```
 
@@ -164,18 +181,21 @@ async def main():
    - Consider error handling and recovery
    - Monitor execution times
    - Use templates for complex workflows
+   - Leverage dynamic task groups for parallel processing
 
 3. **Configuration**
    - Use configuration for flexible task behavior
    - Document configuration options
    - Provide sensible defaults
    - Use templates for consistent configuration
+   - Configure max_concurrent for task groups appropriately
 
 4. **Output Handling**
    - Use consistent output formats
    - Include timestamps in outputs
    - Handle missing or invalid outputs gracefully
    - Use relative paths (prev, prev2) for task output access
+   - Aggregate results from dynamic task groups effectively
 
 ## Error Handling
 
@@ -190,21 +210,25 @@ The system provides several levels of error handling:
    - Stops execution on task failure
    - Provides error information in results
    - Maintains execution order integrity
+   - Handles dynamic task group failures gracefully
 
 3. **Output Access**
    - Validates task outputs before access
    - Provides clear error messages for missing outputs
    - Handles relative path errors gracefully
+   - Manages aggregated outputs from task groups
 
 4. **Template Level**
    - Validates template structure
    - Provides clear error messages for invalid templates
    - Handles missing or invalid task configurations
+   - Validates dynamic task group configurations
 
 ## Future Enhancements
 
 1. **Planned Features**
-   - [ ] Parallel task execution
+   - [X] Parallel task execution
+   - [X] Dynamic Task Handling
    - [ ] Task retry mechanisms
    - [ ] Workflow persistence
    - [X] Enhanced monitoring and logging
@@ -214,7 +238,7 @@ The system provides several levels of error handling:
    - [ ] Web interface for workflow management
    - [ ] Task scheduling capabilities
    - [ ] Enhanced error recovery
-   - [x] Workflow templates
+   - [X] Workflow templates
    - [ ] Plugin system for custom tasks
 
 ## Contributing
@@ -246,17 +270,14 @@ import asyncio
 from omniTask import Workflow, TaskRegistry, WorkflowTemplate
 
 async def main():
-    # Using Python code
     registry = TaskRegistry()
     workflow = Workflow("my_workflow", registry)
     
-    # Register and use functions
     workflow.register_function(my_function)
     task = workflow.create_function_task("my_function", "task1")
     
     result = await workflow.run()
 
-    # Or using templates
     template = WorkflowTemplate("workflow.yaml")
     workflow = template.create_workflow(registry)
     result = await workflow.run()
