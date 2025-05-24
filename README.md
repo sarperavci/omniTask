@@ -224,22 +224,27 @@ The system provides several levels of error handling:
    - Handles missing or invalid task configurations
    - Validates dynamic task group configurations
 
-## Future Enhancements
+## Planned Features
 
-1. **Planned Features**
+   - [X] Workflow templates
    - [X] Parallel task execution
    - [X] Dynamic Task Handling
+   - [ ] Dynamic Task Signal Handling 
    - [ ] Task retry mechanisms
    - [ ] Workflow persistence
    - [X] Enhanced monitoring and logging
    - [X] Task timeout handling
-
-2. **Potential Improvements**
+   - [ ] Conditional task execution (if/else branches)
+   - [ ] Task result streaming
+   - [ ] Task input/output validation
+   - [ ] Resource usage monitoring
+   - [ ] Task progress tracking
+   - [ ] Workflow versioning
+   - [ ] Task caching for repeated executions
    - [ ] Web interface for workflow management
    - [ ] Task scheduling capabilities
    - [ ] Enhanced error recovery
-   - [X] Workflow templates
-   - [ ] Plugin system for custom tasks
+   - [ ] Distributed task execution
 
 ## Contributing
 
