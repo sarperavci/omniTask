@@ -19,7 +19,7 @@ async def main():
         {
             "operation": "write",
             "file_path": "demo.txt",
-            "content": "Hello! This is a demo of OmniTask.\nIt shows how tasks can work together."
+            "content": "Hello! This is a demo of OmniTask.\nIt shows how tasks can work together.\nThis is a new line.\nAnd another one."
         }
     )
     
@@ -33,22 +33,22 @@ async def main():
         }
     )
     
-    # Count words and characters
+    # Branch 1: Count words and characters
     count_task = workflow.create_task(
         "count",
         "count_stats",
         {}
     )
     
-    # Convert to uppercase
+    # Branch 2: Convert to uppercase
     uppercase_task = workflow.create_task(
         "uppercase",
         "make_uppercase",
         {}
     )
     
-    # Save the uppercase version
-    save_task = workflow.create_task(
+    # Save results from both branches
+    save_uppercase_task = workflow.create_task(
         "file_ops",
         "save_uppercase",
         {
@@ -57,11 +57,25 @@ async def main():
         }
     )
     
+    save_stats_task = workflow.create_task(
+        "file_ops",
+        "save_stats",
+        {
+            "operation": "write",
+            "file_path": "stats.txt"
+        }
+    )
+    
     # Set up dependencies
     read_task.add_dependency("create_file")
+    
+    # Branch 1 dependencies
     count_task.add_dependency("read_file")
+    save_stats_task.add_dependency("count_stats")
+    
+    # Branch 2 dependencies
     uppercase_task.add_dependency("read_file")
-    save_task.add_dependency("make_uppercase")
+    save_uppercase_task.add_dependency("make_uppercase")
     
     # Run workflow
     result = await workflow.run()
@@ -73,7 +87,9 @@ async def main():
         if not task_result.success:
             print(f"Error: {task_result.error}")
         print(f"Output: {task_result.output}")
-        print(f"Execution Time: {task_result.execution_time:.2f}s\n")
+        if task_result.execution_time is not None:
+            print(f"Execution Time: {task_result.execution_time:.2f}s")
+        print()
 
 if __name__ == "__main__":
     asyncio.run(main())

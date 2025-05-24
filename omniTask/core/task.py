@@ -8,6 +8,7 @@ import sys
 import re
 import asyncio
 from datetime import datetime
+import time
 
 from ..models.task_result import TaskResult
 
@@ -63,17 +64,23 @@ class Task(ABC):
         self.log(logging.CRITICAL, message, **kwargs)
 
     async def execute_with_timeout(self) -> TaskResult:
+        start_time = time.time()
         if self.timeout is None:
-            return await self.execute()
+            result = await self.execute()
+            result.execution_time = time.time() - start_time
+            return result
 
         try:
-            return await asyncio.wait_for(self.execute(), timeout=self.timeout)
+            result = await asyncio.wait_for(self.execute(), timeout=self.timeout)
+            result.execution_time = time.time() - start_time
+            return result
         except asyncio.TimeoutError:
             self.logger.error(f"Task {self.name} timed out after {self.timeout} seconds")
             return TaskResult(
                 success=False,
                 output={},
-                error=TimeoutError(f"Task execution timed out after {self.timeout} seconds")
+                error=TimeoutError(f"Task execution timed out after {self.timeout} seconds"),
+                execution_time=time.time() - start_time
             )
 
     @classmethod

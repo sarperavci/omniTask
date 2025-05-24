@@ -21,7 +21,9 @@ async def main():
         if not task_result.success:
             print(f"Error: {task_result.error}")
         print(f"Output: {task_result.output}")
-        print(f"Execution Time: {task_result.execution_time:.2f}s\n")
+        if task_result.execution_time is not None:
+            print(f"Execution Time: {task_result.execution_time:.2f}s")
+        print()
 
 if __name__ == "__main__":
     asyncio.run(main()) 

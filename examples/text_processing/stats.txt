@@ -1,0 +1,4 @@
+Hello! This is a demo of OmniTask.
+It shows how tasks can work together.
+This is a new line.
+And another one.

@@ -1,4 +1,4 @@
-from typing import Dict, List, Any, Callable, Optional
+from typing import Dict, List, Any, Callable, Optional, Set
 import logging
 from datetime import datetime
 import time
@@ -28,6 +28,8 @@ class Workflow:
         self.task_groups: Dict[str, TaskGroup] = {}
         self.logger = logging.getLogger(f"workflow.{name}")
         self.execution_order: List[str] = []
+        self.task_dependencies: Dict[str, Set[str]] = {}
+        self.task_dependents: Dict[str, Set[str]] = {}
 
     def add_task(self, task: Task) -> None:
         """
@@ -133,6 +135,43 @@ class Workflow:
                     raise KeyError(f"Path part '{part}' not found in {current}")
         return current
 
+    def _build_dependency_graph(self) -> None:
+        self.task_dependencies = {}
+        self.task_dependents = {}
+        
+        for task_name, task in self.tasks.items():
+            self.task_dependencies[task_name] = set(task.task_dependencies)
+            for dep in task.task_dependencies:
+                if dep not in self.task_dependents:
+                    self.task_dependents[dep] = set()
+                self.task_dependents[dep].add(task_name)
+
+    def _get_ready_tasks(self, completed_tasks: Set[str]) -> Set[str]:
+        ready = set()
+        for task_name in self.tasks:
+            if task_name not in completed_tasks and task_name not in ready:
+                deps = self.task_dependencies.get(task_name, set())
+                if all(dep in completed_tasks for dep in deps):
+                    ready.add(task_name)
+        return ready
+
+    async def _execute_task(self, task_name: str, results: Dict[str, TaskResult]) -> TaskResult:
+        task = self.tasks[task_name]
+        task.dependency_outputs = {
+            prev_task: results[prev_task].output
+            for prev_task in self.task_dependencies[task_name]
+        }
+        task.dependency_order = list(self.task_dependencies[task_name])
+        
+        result = await task.execute_with_timeout()
+        results[task_name] = result
+        
+        if not result.success:
+            error_type = "timeout" if isinstance(result.error, TimeoutError) else "error"
+            self.logger.error(f"Task {task_name} failed with {error_type}: {result.error}")
+        
+        return result
+
     async def run(self) -> Dict[str, TaskResult]:
         """
         Run the entire workflow, executing all tasks in the correct order based on their dependencies.
@@ -146,56 +185,45 @@ class Workflow:
             - Each task's output is made available to its dependent tasks
         """
         results = {}
-        self.execution_order = []
-        visited = set()
+        completed_tasks = set()
+        self._build_dependency_graph()
         
-        def visit(task_name: str):
-            if task_name in visited:
-                return
-            visited.add(task_name)
+        while True:
+            ready_tasks = self._get_ready_tasks(completed_tasks)
+            if not ready_tasks:
+                break
+                
+            tasks_to_execute = []
+            for task_name in ready_tasks:
+                if task_name in self.tasks:
+                    tasks_to_execute.append(task_name)
             
-            if task_name in self.tasks:
-                task = self.tasks[task_name]
-                for dep in task.task_dependencies:
-                    visit(dep)
-            elif task_name in self.task_groups:
-                pass
-            else:
-                raise ValueError(f"Task or group {task_name} not found")
+            if not tasks_to_execute:
+                break
                 
-            self.execution_order.append(task_name)
-        
-        for task_name in self.tasks:
-            visit(task_name)
+            self.logger.info(f"Executing {len(tasks_to_execute)} tasks concurrently: {tasks_to_execute}")
             
-        for group_name in self.task_groups:
-            if group_name not in self.execution_order:
-                self.execution_order.append(group_name)
-        
-        for task_name in self.execution_order:
-            if task_name in self.tasks:
-                task = self.tasks[task_name]
-                task.dependency_outputs = {
-                    prev_task: results[prev_task].output
-                    for prev_task in self.execution_order[:self.execution_order.index(task_name)]
-                }
-                task.dependency_order = self.execution_order[:self.execution_order.index(task_name)]
+            task_results = await asyncio.gather(
+                *(self._execute_task(task_name, results) for task_name in tasks_to_execute),
+                return_exceptions=True
+            )
+            
+            for task_name, result in zip(tasks_to_execute, task_results):
+                if isinstance(result, Exception):
+                    self.logger.error(f"Task {task_name} failed with error: {result}")
+                    results[task_name] = TaskResult(success=False, output={}, error=result)
+                completed_tasks.add(task_name)
                 
-                result = await task.execute_with_timeout()
-                results[task_name] = result
+                if not results[task_name].success:
+                    self.logger.error(f"Workflow stopped due to task {task_name} failure")
+                    return results
                 
-                if not result.success:
-                    error_type = "timeout" if isinstance(result.error, TimeoutError) else "error"
-                    self.logger.error(f"Task {task_name} failed with {error_type}: {result.error}")
-                    break
-                
-                # Execute task groups that depend on this task
                 for group_name, group in self.task_groups.items():
                     if any(dep == task_name for dep in group.config.for_each.split('.')):
                         self.logger.info(f"Executing task group {group_name} for task {task_name}")
                         
                         path_parts = group.config.for_each.split('.')
-                        current = result.output
+                        current = results[task_name].output
                         
                         for part in path_parts[1:]:
                             if isinstance(current, dict) and part in current:
@@ -210,14 +238,12 @@ class Workflow:
                         group_result = await group.execute()
                         results[group_name] = group_result
                         
-                        for next_task_name in self.execution_order[self.execution_order.index(task_name) + 1:]:
+                        for next_task_name in self.task_dependents.get(group_name, set()):
                             if next_task_name in self.tasks:
                                 next_task = self.tasks[next_task_name]
                                 next_task.dependency_outputs[group_name] = group_result.output
                                 if group_name not in next_task.dependency_order:
                                     next_task.dependency_order.append(group_name)
-            elif task_name in self.task_groups:
-                pass
         
         return results
 
