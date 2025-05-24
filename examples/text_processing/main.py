@@ -2,9 +2,10 @@ import asyncio
 import logging
 from omniTask.core.workflow import Workflow
 from omniTask.core.registry import TaskRegistry
+from omniTask.utils.logging import setup_task_logging
 
 async def main():
-    logging.basicConfig(level=logging.INFO)
+    setup_task_logging(level=logging.INFO)
     
     registry = TaskRegistry()
     registry.load_tasks_from_directory("tasks")

@@ -37,6 +37,31 @@ class Task(ABC):
         self.logger = logging.getLogger(f"task.{name}")
         self.timeout = self.config.get('timeout', self.default_timeout)
 
+    def log(self, level: int, message: str, **kwargs) -> None:
+        extra = {
+            "task_name": self.name,
+            "task_type": self.task_name,
+            "status": self.status.value,
+            "timestamp": datetime.now().isoformat(),
+            **kwargs
+        }
+        self.logger.log(level, message, extra=extra)
+
+    def log_debug(self, message: str, **kwargs) -> None:
+        self.log(logging.DEBUG, message, **kwargs)
+
+    def log_info(self, message: str, **kwargs) -> None:
+        self.log(logging.INFO, message, **kwargs)
+
+    def log_warning(self, message: str, **kwargs) -> None:
+        self.log(logging.WARNING, message, **kwargs)
+
+    def log_error(self, message: str, **kwargs) -> None:
+        self.log(logging.ERROR, message, **kwargs)
+
+    def log_critical(self, message: str, **kwargs) -> None:
+        self.log(logging.CRITICAL, message, **kwargs)
+
     async def execute_with_timeout(self) -> TaskResult:
         if self.timeout is None:
             return await self.execute()
