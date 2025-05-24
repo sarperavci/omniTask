@@ -4,4 +4,4 @@ from .core.task import Task
 from .models.task_result import TaskResult
 from .utils.logging import setup_task_logging, TaskLogFormatter
 
-__version__ = "0.3.0"
+__version__ = "0.3.1"
