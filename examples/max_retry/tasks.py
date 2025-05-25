@@ -13,7 +13,7 @@ class FileReader(Task):
         self.logger.info(f"Starting File Read for {self.config.get('file_name')}")
 
         self.logger.info("Waiting for 3 seconds")
-        asyncio.sleep(3)
+        await asyncio.sleep(3)
 
         file_name = self.config.get('file_name')
         if file_name is None:
