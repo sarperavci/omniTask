@@ -35,6 +35,7 @@ class Task(ABC):
     task_name: str = None
     library_dependencies: Set[str] = set()
     default_timeout: Optional[float] = None
+    default_max_retry: Optional[int] = None
 
     def __init__(self, name: str, config: Dict[str, Any] = None):
         if not self.task_name:
@@ -49,6 +50,8 @@ class Task(ABC):
         self.logger = logging.getLogger(f"task.{name}")
         self.timeout = self.config.get('timeout', self.default_timeout)
         self.condition = self.config.get('condition')
+        self.max_retry = self.config.get('max_retry', self.default_max_retry)
+        self.retries = 0
 
     def log(self, level: int, message: str, **kwargs) -> None:
         extra = {
@@ -153,14 +156,30 @@ class Task(ABC):
             )
 
         start_time = time.time()
+        success=False
         if self.timeout is None:
-            result = await self.execute()
-            result.execution_time = time.time() - start_time
+            while success is False and self.retries < self.max_retry:
+                result = await self.execute()
+                result.execution_time = time.time() - start_time
+                self.retries+=1
+                success = result.success
+
+            if self.retries > 1:
+                result.retries = self.retries
+
             return result
 
+        success=False
         try:
-            result = await asyncio.wait_for(self.execute(), timeout=self.timeout)
-            result.execution_time = time.time() - start_time
+            while success is False and self.retries < self.max_retry:
+                result = await asyncio.wait_for(self.execute(), timeout=self.timeout)
+                result.execution_time = time.time() - start_time
+                self.retries+=1
+                success = result.success
+
+            if self.retries > 1:
+                result.retries = self.retries
+
             return result
         except asyncio.TimeoutError:
             self.logger.error(f"Task {self.name} timed out after {self.timeout} seconds")
@@ -168,7 +187,8 @@ class Task(ABC):
                 success=False,
                 output={},
                 error=TimeoutError(f"Task execution timed out after {self.timeout} seconds"),
-                execution_time=time.time() - start_time
+                execution_time=time.time() - start_time,
+                retries=self.retries if self.retries > 1 else None,
             )
 
     @classmethod

@@ -230,7 +230,7 @@ The system provides several levels of error handling:
    - [X] Parallel task execution
    - [X] Dynamic Task Handling
    - [ ] Dynamic Task Signal Handling 
-   - [ ] Task retry mechanisms
+   - [X] Task retry mechanisms
    - [ ] Workflow persistence
    - [X] Enhanced monitoring and logging
    - [X] Task timeout handling

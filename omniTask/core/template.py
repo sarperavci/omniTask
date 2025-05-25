@@ -65,6 +65,11 @@ class WorkflowTemplate:
                 self._validate_condition(task_config['condition'])
                 config['condition'] = task_config['condition']
 
+            if 'max_retry' in task_config:
+                max_retry = task_config['max_retry']
+                if max_retry > 0:
+                    config['max_retry'] = max_retry
+
             task = workflow.create_task(task_type, task_name, config)
 
             task_deps = set()

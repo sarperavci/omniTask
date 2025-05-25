@@ -1,0 +1,8 @@
+name: max_retry_workflow
+
+tasks:
+  file_reader:
+    type: file_reader
+    config:
+      file_name: nonexistent.txt
+    max_retry: 3
