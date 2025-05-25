@@ -6,6 +6,8 @@ from pathlib import Path
 from omniTask.core.registry import TaskRegistry
 from omniTask.core.template import WorkflowTemplate
 from omniTask.utils.logging import setup_task_logging
+from omniTask.utils.workflow_checker import WorkflowChecker
+ 
 from tasks import DataGeneratorTask, StatsCalculatorTask, NumberProcessorTask, FileOperationsTask
 
 async def main():
@@ -21,6 +23,15 @@ async def main():
 
     template = WorkflowTemplate("workflow.yaml")
     workflow = template.create_workflow(registry)
+    
+    workflow_checker = WorkflowChecker(workflow)
+    workflow_status = workflow_checker.validate_workflow()
+    
+    if not workflow_status:
+        logger.info("Illegal workflow structure!")
+        exit()
+    
+
 
     logger.info("Starting conditional workflow")
     try:

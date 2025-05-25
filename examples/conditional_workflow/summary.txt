@@ -1,6 +1,0 @@
-Data Processing Summary:
-Total Numbers: 10
-Average: 47.9
-Max Value: 96
-Min Value: 14
-Numbers: [60, 35, 17, 87, 45, 49, 14, 18, 96, 58]

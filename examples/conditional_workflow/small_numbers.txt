@@ -1,5 +1,0 @@
-Small Numbers Analysis:
-Average: 47.9
-Processed Numbers: [35, 17, 45, 49, 14, 18]
-Count: 6
-Threshold: 50
