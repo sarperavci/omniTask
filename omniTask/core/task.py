@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional, Set, Union
 from enum import Enum
 import logging
 import pkg_resources
@@ -9,6 +9,8 @@ import re
 import asyncio
 from datetime import datetime
 import time
+import json
+import ast
 
 from ..models.task_result import TaskResult
 
@@ -19,6 +21,15 @@ class TaskStatus(Enum):
     FAILED = "failed"
     SKIPPED = "skipped"
     TIMEOUT = "timeout"
+    CONDITION_NOT_MET = "condition_not_met"
+
+def safe_literal_eval(value: Any) -> Any:
+    if isinstance(value, str):
+        try:
+            return ast.literal_eval(value)
+        except (ValueError, SyntaxError):
+            return value
+    return value
 
 class Task(ABC):
     task_name: str = None
@@ -37,6 +48,7 @@ class Task(ABC):
         self.dependency_order: List[str] = []
         self.logger = logging.getLogger(f"task.{name}")
         self.timeout = self.config.get('timeout', self.default_timeout)
+        self.condition = self.config.get('condition')
 
     def log(self, level: int, message: str, **kwargs) -> None:
         extra = {
@@ -63,7 +75,83 @@ class Task(ABC):
     def log_critical(self, message: str, **kwargs) -> None:
         self.log(logging.CRITICAL, message, **kwargs)
 
+    def _evaluate_condition(self) -> bool:
+        if not self.condition:
+            return True
+
+        if isinstance(self.condition, dict):
+            operator = self.condition.get("operator")
+            value = self.condition.get("value")
+            path = self.condition.get("path")
+
+            if not all([operator, value, path]):
+                return False
+
+            task_name, key = path.split(".")
+            if task_name not in self.dependency_outputs:
+                return False
+
+            task_output = self.dependency_outputs[task_name]
+            if key not in task_output:
+                return False
+
+            actual_value = task_output[key]
+            if operator == "gt":
+                return actual_value > value
+            elif operator == "gte":
+                return actual_value >= value
+            elif operator == "lt":
+                return actual_value < value
+            elif operator == "lte":
+                return actual_value <= value
+            elif operator == "eq":
+                return actual_value == value
+            elif operator == "ne":
+                return actual_value != value
+            return False
+
+        if isinstance(self.condition, str):
+            condition = self.condition
+            for task_name, output in self.dependency_outputs.items():
+                condition = condition.replace(f"${task_name}", json.dumps(output))
+            
+            parts = condition.split()
+            if len(parts) != 3:
+                return False
+                
+            left, op, right = parts
+            try:
+                left_val = json.loads(left)
+                right_val = json.loads(right)
+                
+                if op == ">":
+                    return left_val > right_val
+                elif op == ">=":
+                    return left_val >= right_val
+                elif op == "<":
+                    return left_val < right_val
+                elif op == "<=":
+                    return left_val <= right_val
+                elif op == "==":
+                    return left_val == right_val
+                elif op == "!=":
+                    return left_val != right_val
+                return False
+            except (json.JSONDecodeError, ValueError):
+                return False
+
+        return False
+
     async def execute_with_timeout(self) -> TaskResult:
+        if not self._evaluate_condition():
+            self.status = TaskStatus.CONDITION_NOT_MET
+            self.logger.info(f"Task {self.name} skipped due to condition not met")
+            return TaskResult(
+                success=True,
+                output={"skipped": True, "reason": "condition_not_met"},
+                execution_time=0.0
+            )
+
         start_time = time.time()
         if self.timeout is None:
             result = await self.execute()
@@ -104,17 +192,6 @@ class Task(ABC):
                 raise RuntimeError(f"Failed to install dependencies for {cls.task_name}: {e}")
 
     def _resolve_config(self) -> Dict[str, Any]:
-        """Resolves configuration values by substituting variables from task outputs.
-        
-        Variables in config values are specified using ${task_name.path} syntax.
-        Example: ${previous_task.data.items}
-        
-        Returns:
-            Dict[str, Any]: Configuration with all variables resolved to their values
-            
-        Raises:
-            ValueError: If referenced task or path doesn't exist
-        """
         resolved_config = {}
         for key, value in self.config.items():
             if isinstance(value, str):
@@ -133,8 +210,12 @@ class Task(ABC):
                                 raise ValueError(f"Path {match} not found in task output")
                         
                         value = value.replace(f"${{{match}}}", str(current))
-            resolved_config[key] = value
+            resolved_config[key] = safe_literal_eval(value)
         return resolved_config
+
+    def get_config(self, key: str, default: Any = None) -> Any:
+        resolved_config = self._resolve_config()
+        return resolved_config.get(key, default)
 
     def add_dependency(self, task_name: str) -> None:
         """Adds a task dependency and updates the dependency order.

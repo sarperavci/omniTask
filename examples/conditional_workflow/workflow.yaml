@@ -1,0 +1,79 @@
+name: conditional_data_processing
+
+tasks:
+  generate_data:
+    type: data_generator
+    config:
+      min_value: 1
+      max_value: 100
+      count: 10
+
+  calculate_stats:
+    type: stats_calculator
+    config:
+      input: ${generate_data.numbers}
+    dependencies:
+      - generate_data
+
+  process_large_numbers:
+    type: number_processor
+    config:
+      input: ${calculate_stats.numbers}
+      threshold: 50
+    condition:
+      operator: gt
+      value: 50
+      path: calculate_stats.average
+    dependencies:
+      - calculate_stats
+
+  process_small_numbers:
+    type: number_processor
+    config:
+      input: ${calculate_stats.numbers}
+      threshold: 50
+    condition:
+      operator: lte
+      value: 50
+      path: calculate_stats.average
+    dependencies:
+      - calculate_stats
+
+  save_large_results:
+    type: file_ops
+    config:
+      operation: write
+      file_path: large_numbers.txt
+      content: 'Large Numbers Analysis:\nAverage: ${calculate_stats.average}\nProcessed Numbers: ${process_large_numbers.processed}\nCount: ${process_large_numbers.count}\nThreshold: ${process_large_numbers.threshold}'
+    condition:
+      operator: gt
+      value: 50
+      path: calculate_stats.average
+    dependencies:
+      - calculate_stats
+      - process_large_numbers
+
+  save_small_results:
+    type: file_ops
+    config:
+      operation: write
+      file_path: small_numbers.txt
+      content: 'Small Numbers Analysis:\nAverage: ${calculate_stats.average}\nProcessed Numbers: ${process_small_numbers.processed}\nCount: ${process_small_numbers.count}\nThreshold: ${process_small_numbers.threshold}'
+    condition:
+      operator: lte
+      value: 50
+      path: calculate_stats.average
+    dependencies:
+      - calculate_stats
+      - process_small_numbers
+
+  generate_summary:
+    type: file_ops
+    config:
+      operation: write
+      file_path: summary.txt
+      content: 'Data Processing Summary:\nTotal Numbers: ${calculate_stats.count}\nAverage: ${calculate_stats.average}\nMax Value: ${calculate_stats.max}\nMin Value: ${calculate_stats.min}\nNumbers: ${calculate_stats.numbers}'
+    dependencies:
+      - calculate_stats
+      - process_large_numbers
+      - process_small_numbers 

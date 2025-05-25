@@ -234,7 +234,7 @@ The system provides several levels of error handling:
    - [ ] Workflow persistence
    - [X] Enhanced monitoring and logging
    - [X] Task timeout handling
-   - [ ] Conditional task execution (if/else branches)
+   - [X] Conditional task execution (if/else branches)
    - [ ] Task result streaming
    - [ ] Task input/output validation
    - [ ] Resource usage monitoring
@@ -286,4 +286,66 @@ async def main():
     template = WorkflowTemplate("workflow.yaml")
     workflow = template.create_workflow(registry)
     result = await workflow.run()
+```
+
+### Conditional Task Execution
+OmniTask supports conditional task execution using two types of conditions:
+
+1. **String-based Conditions**
+   ```yaml
+   task_name:
+     type: task_type
+     condition: "${prev_task.output.count} > 10"
+     config:
+       param1: value1
+   ```
+
+2. **Dictionary-based Conditions**
+   ```yaml
+   task_name:
+     type: task_type
+     condition:
+       operator: gt
+       value: 10
+       path: prev_task.output.count
+     config:
+       param1: value1
+   ```
+
+#### Supported Operators
+- `eq`: Equal to
+- `ne`: Not equal to
+- `gt`: Greater than
+- `lt`: Less than
+- `gte`: Greater than or equal to
+- `lte`: Less than or equal to
+- `in`: Value is in list
+- `not_in`: Value is not in list
+
+#### Example
+```yaml
+tasks:
+  process_data:
+    type: data_processor
+    config:
+      input: ${read_file.content}
+
+  analyze_if_large:
+    type: analyzer
+    condition:
+      operator: gt
+      value: 1000
+      path: process_data.output.size
+    dependencies:
+      - process_data
+
+  save_results:
+    type: file_ops
+    condition: "${analyze_if_large.success} == true"
+    config:
+      operation: write
+      file_path: results.txt
+      content: ${analyze_if_large.output}
+    dependencies:
+      - analyze_if_large
 ```

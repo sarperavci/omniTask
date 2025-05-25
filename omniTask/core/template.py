@@ -24,6 +24,18 @@ class WorkflowTemplate:
             else:
                 raise ValueError("Template file must be YAML or JSON")
 
+    def _validate_condition(self, condition: Any) -> None:
+        if isinstance(condition, str):
+            return
+        elif isinstance(condition, dict):
+            required_fields = {'operator', 'value', 'path'}
+            if not all(field in condition for field in required_fields):
+                raise ValueError(f"Condition dict must contain: {required_fields}")
+            if condition['operator'] not in {'eq', 'ne', 'gt', 'lt', 'gte', 'lte', 'in', 'not_in'}:
+                raise ValueError(f"Invalid operator: {condition['operator']}")
+        else:
+            raise ValueError("Condition must be a string or dict")
+
     def create_workflow(self, registry: Optional[TaskRegistry] = None) -> Workflow:
         if not isinstance(self.template_data, dict):
             raise ValueError("Invalid template format: root must be a dictionary")
@@ -34,7 +46,7 @@ class WorkflowTemplate:
 
         workflow = Workflow(workflow_name, registry or TaskRegistry())
         tasks = self.template_data.get('tasks', {})
-        dependencies = self.template_data.get('dependencies', {})
+        global_dependencies = self.template_data.get('dependencies', {})
 
         for task_name, task_config in tasks.items():
             if not isinstance(task_config, dict):
@@ -48,11 +60,20 @@ class WorkflowTemplate:
                 raise ValueError(f"Task {task_name} must specify a type")
 
             config = task_config.get('config', {})
+            
+            if 'condition' in task_config:
+                self._validate_condition(task_config['condition'])
+                config['condition'] = task_config['condition']
+
             task = workflow.create_task(task_type, task_name, config)
 
-            task_deps = task_config.get('dependencies', [])
-            if task_name in dependencies:
-                task_deps.extend(dependencies[task_name])
+            task_deps = set()
+            
+            if 'dependencies' in task_config:
+                task_deps.update(task_config['dependencies'])
+            
+            if task_name in global_dependencies:
+                task_deps.update(global_dependencies[task_name])
             
             for dep in task_deps:
                 if dep in tasks and 'for_each' in tasks[dep]:
