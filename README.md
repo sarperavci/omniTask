@@ -236,7 +236,7 @@ The system provides several levels of error handling:
    - [X] Task timeout handling
    - [X] Conditional task execution (if/else branches)
    - [ ] Task result streaming
-   - [ ] Task input/output validation
+   - [X] Task input/output validation
    - [ ] Resource usage monitoring
    - [ ] Task progress tracking
    - [ ] Workflow versioning
