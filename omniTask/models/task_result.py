@@ -7,3 +7,4 @@ class TaskResult:
     output: Dict[str, Any]
     error: Optional[Exception] = None
     execution_time: Optional[float] = None 
+    retries: Optional[int] = None
