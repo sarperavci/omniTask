@@ -2,7 +2,7 @@ from omniTask.core.task import Task
 from omniTask.models.task_result import TaskResult
 import logging
 from pathlib import Path
-import time
+import asyncio
 
 class FileReader(Task):
     task_name="file_reader"
@@ -13,7 +13,7 @@ class FileReader(Task):
         self.logger.info(f"Starting File Read for {self.config.get('file_name')}")
 
         self.logger.info("Waiting for 3 seconds")
-        time.sleep(3)
+        asyncio.sleep(3)
 
         file_name = self.config.get('file_name')
         if file_name is None:
