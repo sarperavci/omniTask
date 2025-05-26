@@ -36,11 +36,16 @@ class TaskGroup:
     def _create_task_config(self, item: Any) -> Dict[str, Any]:
         config = {}
         for key, value in self.config.config_template.items():
-            if isinstance(value, str) and value.startswith("$"):
-                path = value[1:]
-                if path.startswith("."):
-                    path = path[1:]
-                config[key] = self._get_value_from_path(item, path)
+            if isinstance(value, str):
+                if value == "${item}":
+                    config[key] = item
+                elif value.startswith("$"):
+                    path = value[1:]
+                    if path.startswith("."):
+                        path = path[1:]
+                    config[key] = self._get_value_from_path(item, path)
+                else:
+                    config[key] = value
             else:
                 config[key] = value
         return config
