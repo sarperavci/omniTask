@@ -35,7 +35,7 @@ class Task(ABC):
     task_name: str = None
     library_dependencies: Set[str] = set()
     default_timeout: Optional[float] = None
-    default_max_retry: Optional[int] = None
+    default_max_retry: Optional[int] = 0
 
     def __init__(self, name: str, config: Dict[str, Any] = None):
         if not self.task_name:
