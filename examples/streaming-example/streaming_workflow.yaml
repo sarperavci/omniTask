@@ -1,0 +1,26 @@
+name: streaming_workflow_example
+
+tasks:
+  streaming_subdomain_scanner:
+    type: streaming_subdomain_scanner
+    streaming_enabled: true
+    config:
+      target: example.com
+
+  streaming_url_checker:
+    type: streaming_url_checker
+    for_each: streaming_subdomain_scanner.subdomains
+    streaming_enabled: true
+    config_template:
+      url: $.url
+      timeout: 3
+    max_concurrent: 3
+
+  result_analyzer:
+    type: result_analyzer
+    config:
+      analysis_type: "streaming_url_status"
+
+dependencies:
+  result_analyzer:
+    - streaming_url_checker 

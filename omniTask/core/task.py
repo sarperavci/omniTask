@@ -12,7 +12,7 @@ import time
 import json
 import ast
 
-from ..models.task_result import TaskResult
+from ..models.task_result import TaskResult, StreamingTaskResult, StreamingYielder
 
 class TaskStatus(Enum):
     PENDING = "pending"
@@ -156,26 +156,28 @@ class Task(ABC):
             )
 
         start_time = time.time()
-        success=False
+        result = None
+        
         if self.timeout is None:
-            while success is False and self.retries < self.max_retry:
+            while self.retries <= self.max_retry:
                 result = await self.execute()
                 result.execution_time = time.time() - start_time
-                self.retries+=1
-                success = result.success
+                self.retries += 1
+                if result.success or self.retries > self.max_retry:
+                    break
 
             if self.retries > 1:
                 result.retries = self.retries
 
             return result
 
-        success=False
         try:
-            while success is False and self.retries < self.max_retry:
+            while self.retries <= self.max_retry:
                 result = await asyncio.wait_for(self.execute(), timeout=self.timeout)
                 result.execution_time = time.time() - start_time
-                self.retries+=1
-                success = result.success
+                self.retries += 1
+                if result.success or self.retries > self.max_retry:
+                    break
 
             if self.retries > 1:
                 result.retries = self.retries
@@ -334,4 +336,82 @@ class Task(ABC):
         Returns:
             TaskResult: Result of the task execution
         """
-        pass 
+        pass
+
+class StreamingTask(Task):
+    """
+    A task that can yield intermediate results during execution.
+    This enables streaming mode where downstream tasks can start processing
+    before the task completes.
+    """
+    
+    def __init__(self, name: str, config: Dict[str, Any] = None):
+        super().__init__(name, config)
+        self.yielder: Optional[StreamingYielder] = None
+        self._streaming_enabled = self.config.get('streaming_enabled', False)
+    
+    @property 
+    def streaming_enabled(self) -> bool:
+        return self._streaming_enabled
+    
+    def enable_streaming(self) -> StreamingYielder:
+        """Enable streaming mode and return the yielder for this task."""
+        if not self.yielder:
+            self.yielder = StreamingYielder()
+            self._streaming_enabled = True
+        return self.yielder
+    
+    async def yield_result(self, data: Any) -> None:
+        """Yield an intermediate result during task execution."""
+        if self.yielder and self._streaming_enabled:
+            await self.yielder.yield_result(data)
+    
+    async def execute(self) -> TaskResult:
+        """
+        Default implementation that calls execute_streaming.
+        This allows streaming tasks to only implement execute_streaming.
+        """
+        return await self.execute_streaming()
+    
+    async def execute_streaming(self) -> TaskResult:
+        """
+        Execute the task in streaming mode. Override this method 
+        for streaming tasks instead of execute().
+        """
+        raise NotImplementedError("StreamingTask subclasses must implement execute_streaming method")
+
+    async def execute_with_timeout(self) -> TaskResult:
+        """Override to handle streaming execution."""
+        if not self._evaluate_condition():
+            self.status = TaskStatus.CONDITION_NOT_MET
+            self.logger.info(f"Task {self.name} skipped due to condition not met")
+            result = TaskResult(
+                success=True,
+                output={"skipped": True, "reason": "condition_not_met"},
+                execution_time=0.0
+            )
+            if self.yielder:
+                await self.yielder.complete(result)
+            return result
+
+        start_time = time.time()
+        
+        try:
+            if self._streaming_enabled and self.yielder:
+                result = await self.execute_streaming()
+                result.execution_time = time.time() - start_time
+                await self.yielder.complete(result)
+                return result
+            else:
+                return await super().execute_with_timeout()
+                
+        except Exception as e:
+            error_result = TaskResult(
+                success=False,
+                output={},
+                error=e,
+                execution_time=time.time() - start_time
+            )
+            if self.yielder:
+                await self.yielder.complete(error_result)
+            return error_result 

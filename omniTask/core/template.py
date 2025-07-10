@@ -6,6 +6,7 @@ from pathlib import Path
 from .workflow import Workflow
 from .registry import TaskRegistry
 from ..models.task_group import TaskGroupConfig
+from ..utils.workflow_checker import WorkflowChecker
 
 class WorkflowTemplate:
     def __init__(self, template_path: str):
@@ -69,6 +70,9 @@ class WorkflowTemplate:
                 max_retry = task_config['max_retry']
                 if max_retry > 0:
                     config['max_retry'] = max_retry
+            
+            if 'streaming_enabled' in task_config:
+                config['streaming_enabled'] = task_config['streaming_enabled']
 
             task = workflow.create_task(task_type, task_name, config)
 
@@ -89,7 +93,8 @@ class WorkflowTemplate:
                             for_each=group_config.get('for_each'),
                             config_template=group_config.get('config_template', {}),
                             max_concurrent=group_config.get('max_concurrent', 10),
-                            error_handling=group_config.get('error_handling')
+                            error_handling=group_config.get('error_handling'),
+                            streaming_enabled=group_config.get('streaming_enabled', False)
                         )
                         workflow.add_task_group(dep, group)
                 task.add_dependency(dep)
@@ -110,9 +115,17 @@ class WorkflowTemplate:
                     for_each=group_config.get('for_each'),
                     config_template=group_config.get('config_template', {}),
                     max_concurrent=group_config.get('max_concurrent', 10),
-                    error_handling=group_config.get('error_handling')
+                    error_handling=group_config.get('error_handling'),
+                    streaming_enabled=group_config.get('streaming_enabled', False)
                 )
                 workflow.add_task_group(group_name, group)
+
+        workflow_checker = WorkflowChecker(workflow)
+        validation_errors = workflow_checker.check_workflow()
+        
+        if validation_errors:
+            error_message = "Workflow validation failed with the following errors:\n" + "\n".join(f"- {error}" for error in validation_errors)
+            raise ValueError(error_message)
 
         return workflow
 
