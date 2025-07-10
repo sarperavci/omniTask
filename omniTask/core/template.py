@@ -73,6 +73,9 @@ class WorkflowTemplate:
             
             if 'streaming_enabled' in task_config:
                 config['streaming_enabled'] = task_config['streaming_enabled']
+                
+            if 'progress_tracking' in task_config:
+                config['progress_tracking'] = task_config['progress_tracking']
 
             task = workflow.create_task(task_type, task_name, config)
 

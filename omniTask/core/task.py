@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional, Set, Union
+from typing import Any, Dict, List, Optional, Set, Union, Callable
 from enum import Enum
 import logging
 import pkg_resources
@@ -12,7 +12,7 @@ import time
 import json
 import ast
 
-from ..models.task_result import TaskResult, StreamingTaskResult, StreamingYielder
+from ..models.task_result import TaskResult, StreamingTaskResult, StreamingYielder, TaskProgress
 
 class TaskStatus(Enum):
     PENDING = "pending"
@@ -52,6 +52,9 @@ class Task(ABC):
         self.condition = self.config.get('condition')
         self.max_retry = self.config.get('max_retry', self.default_max_retry)
         self.retries = 0
+        self._progress_callbacks: List[Callable[[TaskProgress], None]] = []
+        self._current_progress: Optional[TaskProgress] = None
+        self._progress_enabled = self.config.get('progress_tracking', True)
 
     def log(self, level: int, message: str, **kwargs) -> None:
         extra = {
@@ -77,6 +80,56 @@ class Task(ABC):
 
     def log_critical(self, message: str, **kwargs) -> None:
         self.log(logging.CRITICAL, message, **kwargs)
+
+    def add_progress_callback(self, callback: Callable[[TaskProgress], None]) -> None:
+        """Add a callback function to be called when task progress is updated.
+        
+        Args:
+            callback: Function that takes a TaskProgress object as parameter
+        """
+        if self._progress_enabled:
+            self._progress_callbacks.append(callback)
+
+    def update_progress(self, current: int, total: Optional[int] = None, message: str = "") -> None:
+        """Update the current progress of the task.
+        
+        Args:
+            current: Current progress value
+            total: Total progress value (optional, defaults to existing total or 100)
+            message: Progress message (optional)
+        """
+        if not self._progress_enabled:
+            return
+            
+        if total is None:
+            total = self._current_progress.total if self._current_progress else 100
+            
+        progress = TaskProgress(current=current, total=total, message=message)
+        self._current_progress = progress
+        
+        self.log_info(f"Progress: {progress.percentage:.1f}% ({current}/{total}) - {message}")
+        
+        for callback in self._progress_callbacks:
+            try:
+                callback(progress)
+            except Exception as e:
+                self.log_warning(f"Progress callback failed: {e}")
+
+    def get_progress(self) -> Optional[TaskProgress]:
+        """Get the current progress of the task.
+        
+        Returns:
+            TaskProgress object or None if progress tracking is disabled
+        """
+        return self._current_progress
+
+    def set_progress_enabled(self, enabled: bool) -> None:
+        """Enable or disable progress tracking for this task.
+        
+        Args:
+            enabled: Whether to enable progress tracking
+        """
+        self._progress_enabled = enabled
 
     def _evaluate_condition(self) -> bool:
         if not self.condition:
@@ -152,7 +205,8 @@ class Task(ABC):
             return TaskResult(
                 success=True,
                 output={"skipped": True, "reason": "condition_not_met"},
-                execution_time=0.0
+                execution_time=0.0,
+                progress=self._current_progress
             )
 
         start_time = time.time()
@@ -191,6 +245,7 @@ class Task(ABC):
                 error=TimeoutError(f"Task execution timed out after {self.timeout} seconds"),
                 execution_time=time.time() - start_time,
                 retries=self.retries if self.retries > 1 else None,
+                progress=self._current_progress
             )
 
     @classmethod
@@ -388,7 +443,8 @@ class StreamingTask(Task):
             result = TaskResult(
                 success=True,
                 output={"skipped": True, "reason": "condition_not_met"},
-                execution_time=0.0
+                execution_time=0.0,
+                progress=self._current_progress
             )
             if self.yielder:
                 await self.yielder.complete(result)
@@ -410,7 +466,8 @@ class StreamingTask(Task):
                 success=False,
                 output={},
                 error=e,
-                execution_time=time.time() - start_time
+                execution_time=time.time() - start_time,
+                progress=self._current_progress
             )
             if self.yielder:
                 await self.yielder.complete(error_result)

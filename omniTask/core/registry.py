@@ -91,6 +91,13 @@ class TaskRegistry:
         """
         if task_type not in self._tasks:
             raise ValueError(f"Unknown task type: {task_type}")
+        
+        if config is None:
+            config = {}
+        
+        if 'progress_tracking' not in config:
+            config['progress_tracking'] = True
+            
         return self._tasks[task_type](name, config)
 
     def register_function(self, func: Callable, name: Optional[str] = None) -> None:
@@ -127,6 +134,12 @@ class TaskRegistry:
         if func_name not in self._functions:
             raise ValueError(f"Unknown function: {func_name}")
         
+        if config is None:
+            config = {}
+        
+        if 'progress_tracking' not in config:
+            config['progress_tracking'] = True
+        
         func = self._functions[func_name]
         
         class FunctionTask(Task):
@@ -136,9 +149,9 @@ class TaskRegistry:
                 try:
                     resolved_config = self._resolve_config()
                     result = await func(**resolved_config)
-                    return TaskResult(success=True, output=result)
+                    return TaskResult(success=True, output=result, progress=self._current_progress)
                 except Exception as e:
-                    return TaskResult(success=False, output={}, error=e)
+                    return TaskResult(success=False, output={}, error=e, progress=self._current_progress)
         
         return FunctionTask(name, config)
 

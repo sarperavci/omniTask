@@ -3,7 +3,7 @@ import logging
 from datetime import datetime
 import time
 import asyncio
-from ..models.task_result import TaskResult, StreamingTaskResult, StreamingYielder
+from ..models.task_result import TaskResult, StreamingTaskResult, StreamingYielder, TaskProgress
 from ..models.task_group import TaskGroupConfig, TaskGroup, StreamingTaskGroup
 from .task import Task, TaskStatus, StreamingTask
 from .registry import TaskRegistry
@@ -32,6 +32,9 @@ class Workflow:
         self.task_dependents: Dict[str, Set[str]] = {}
         self._streaming_enabled = False
         self._streaming_task_groups: Dict[str, StreamingTaskGroup] = {}
+        self._progress_callbacks: List[Callable[[str, TaskProgress], None]] = []
+        self._workflow_progress: Dict[str, TaskProgress] = {}
+        self._progress_enabled = True
 
     def add_task(self, task: Task) -> None:
         """
@@ -46,6 +49,10 @@ class Workflow:
         if task.name in self.tasks:
             raise ValueError(f"Task with name {task.name} already exists in workflow")
         self.tasks[task.name] = task
+
+        if self._progress_enabled:
+            task_name = task.name  # Capture the task name to avoid closure issues
+            task.add_progress_callback(lambda progress, name=task_name: self._on_task_progress(name, progress))
 
     def add_task_group(self, name: str, config: TaskGroupConfig) -> None:
         if name in self.task_groups:
@@ -69,7 +76,7 @@ class Workflow:
             raise ValueError(f"Task {name} already exists")
 
         task = self.registry.create_task(task_type, name, config)
-        self.tasks[name] = task
+        self.add_task(task)  # Use add_task to ensure progress tracking is set up
         return task
 
     def create_function_task(self, func_name: str, name: str, config: Dict[str, Any] = None) -> Task:
@@ -454,4 +461,80 @@ class Workflow:
     @property
     def streaming_enabled(self) -> bool:
         """Check if the workflow has streaming capabilities enabled."""
-        return self._streaming_enabled 
+        return self._streaming_enabled
+
+    def add_progress_callback(self, callback: Callable[[str, TaskProgress], None]) -> None:
+        """Add a callback function to be called when any task progress is updated.
+        
+        Args:
+            callback: Function that takes task name and TaskProgress object as parameters
+        """
+        if self._progress_enabled:
+            self._progress_callbacks.append(callback)
+
+    def get_task_progress(self, task_name: str) -> Optional[TaskProgress]:
+        """Get the current progress of a specific task.
+        
+        Args:
+            task_name: Name of the task
+            
+        Returns:
+            TaskProgress object or None if task not found or progress tracking disabled
+        """
+        return self._workflow_progress.get(task_name)
+
+    def get_workflow_progress(self) -> Dict[str, TaskProgress]:
+        """Get the current progress of all tasks in the workflow.
+        
+        Returns:
+            Dictionary mapping task names to their progress
+        """
+        return self._workflow_progress.copy()
+
+    def set_progress_enabled(self, enabled: bool) -> None:
+        """Enable or disable progress tracking for the workflow.
+        
+        Args:
+            enabled: Whether to enable progress tracking
+        """
+        self._progress_enabled = enabled
+        
+        for task in self.tasks.values():
+            task.set_progress_enabled(enabled)
+
+    def _on_task_progress(self, task_name: str, progress: TaskProgress) -> None:
+        """Internal callback for when a task's progress is updated.
+        
+        Args:
+            task_name: Name of the task that updated its progress
+            progress: The new progress information
+        """
+        self._workflow_progress[task_name] = progress
+        
+        for callback in self._progress_callbacks:
+            try:
+                callback(task_name, progress)
+            except Exception as e:
+                self.logger.warning(f"Workflow progress callback failed: {e}")
+
+    def get_overall_progress(self) -> TaskProgress:
+        """Calculate overall workflow progress based on all tasks.
+        
+        Returns:
+            TaskProgress representing the overall workflow progress
+        """
+        if not self._workflow_progress:
+            return TaskProgress(current=0, total=100, message="No tasks started")
+        
+        total_tasks = len(self.tasks)
+        completed_tasks = sum(1 for progress in self._workflow_progress.values() 
+                            if progress.percentage >= 100)
+        
+        overall_percentage = (completed_tasks / total_tasks) * 100 if total_tasks > 0 else 0
+        
+        return TaskProgress(
+            current=completed_tasks,
+            total=total_tasks,
+            message=f"{completed_tasks}/{total_tasks} tasks completed",
+            percentage=overall_percentage
+        ) 

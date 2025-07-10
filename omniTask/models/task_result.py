@@ -3,12 +3,24 @@ from typing import Any, Optional, Dict, AsyncIterator, Callable
 import asyncio
 
 @dataclass
+class TaskProgress:
+    current: int = 0
+    total: int = 100
+    message: str = ""
+    percentage: float = 0.0
+    
+    def __post_init__(self):
+        if self.total > 0:
+            self.percentage = (self.current / self.total) * 100
+
+@dataclass
 class TaskResult:
     success: bool
     output: Dict[str, Any]
     error: Optional[Exception] = None
     execution_time: Optional[float] = None 
     retries: Optional[int] = None
+    progress: Optional[TaskProgress] = None
 
 @dataclass 
 class StreamingTaskResult(TaskResult):
