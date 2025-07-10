@@ -97,6 +97,10 @@ class TaskRegistry:
         
         if 'progress_tracking' not in config:
             config['progress_tracking'] = True
+        
+        # Set default cache configuration
+        if 'cache_enabled' not in config:
+            config['cache_enabled'] = False
             
         return self._tasks[task_type](name, config)
 
@@ -139,6 +143,10 @@ class TaskRegistry:
         
         if 'progress_tracking' not in config:
             config['progress_tracking'] = True
+        
+        # Set default cache configuration
+        if 'cache_enabled' not in config:
+            config['cache_enabled'] = False
         
         func = self._functions[func_name]
         

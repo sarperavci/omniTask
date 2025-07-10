@@ -7,12 +7,13 @@ import subprocess
 import sys
 import re
 import asyncio
-from datetime import datetime
+from datetime import datetime, timedelta
 import time
 import json
 import ast
 
 from ..models.task_result import TaskResult, StreamingTaskResult, StreamingYielder, TaskProgress
+from ..cache import CacheInterface, CacheKeyGenerator
 
 class TaskStatus(Enum):
     PENDING = "pending"
@@ -55,6 +56,11 @@ class Task(ABC):
         self._progress_callbacks: List[Callable[[TaskProgress], None]] = []
         self._current_progress: Optional[TaskProgress] = None
         self._progress_enabled = self.config.get('progress_tracking', True)
+        self._cache: Optional[CacheInterface] = None
+        self._cache_enabled = self.config.get('cache_enabled', False)
+        self._cache_ttl = self.config.get('cache_ttl')
+        if self._cache_ttl and isinstance(self._cache_ttl, (int, float)):
+            self._cache_ttl = timedelta(seconds=self._cache_ttl)
 
     def log(self, level: int, message: str, **kwargs) -> None:
         extra = {
@@ -130,6 +136,88 @@ class Task(ABC):
             enabled: Whether to enable progress tracking
         """
         self._progress_enabled = enabled
+    
+    def set_cache(self, cache: CacheInterface) -> None:
+        """Set the cache interface for this task.
+        
+        Args:
+            cache: The cache interface to use
+        """
+        self._cache = cache
+    
+    def set_cache_enabled(self, enabled: bool) -> None:
+        """Enable or disable caching for this task.
+        
+        Args:
+            enabled: Whether to enable caching
+        """
+        self._cache_enabled = enabled
+    
+    def get_cache_key(self) -> str:
+        """Generate a cache key for this task.
+        
+        Returns:
+            The cache key string
+        """
+        return CacheKeyGenerator.generate_key(self)
+    
+    async def get_cached_result(self) -> Optional[TaskResult]:
+        """Get cached result if available and valid.
+        
+        Returns:
+            Cached TaskResult if available, None otherwise
+        """
+        if not self._cache_enabled or not self._cache:
+            return None
+        
+        cache_key = self.get_cache_key()
+        
+        try:
+            cache_entry = await self._cache.get(cache_key)
+            if cache_entry and cache_entry.is_valid():
+                self.log_info(f"Cache hit for task {self.name}")
+                return cache_entry.result
+        except Exception as e:
+            self.log_warning(f"Cache retrieval failed for task {self.name}: {e}")
+        
+        return None
+    
+    async def cache_result(self, result: TaskResult) -> None:
+        """Cache the task result if caching is enabled.
+        
+        Args:
+            result: The task result to cache
+        """
+        if not self._cache_enabled or not self._cache or not result.success:
+            return
+        
+        cache_key = self.get_cache_key()
+        
+        try:
+            await self._cache.put(cache_key, result, self._cache_ttl)
+            self.log_info(f"Cached result for task {self.name}")
+        except Exception as e:
+            self.log_warning(f"Cache storage failed for task {self.name}: {e}")
+    
+    async def invalidate_cache(self) -> bool:
+        """Invalidate cached result for this task.
+        
+        Returns:
+            True if cache entry was deleted, False otherwise
+        """
+        if not self._cache_enabled or not self._cache:
+            return False
+        
+        cache_key = self.get_cache_key()
+        
+        try:
+            deleted = await self._cache.delete(cache_key)
+            if deleted:
+                self.log_info(f"Invalidated cache for task {self.name}")
+            return deleted
+        except Exception as e:
+            self.log_warning(f"Cache invalidation failed for task {self.name}: {e}")
+            return False
 
     def _evaluate_condition(self) -> bool:
         if not self.condition:
@@ -209,6 +297,13 @@ class Task(ABC):
                 progress=self._current_progress
             )
 
+        # Check cache first
+        cached_result = await self.get_cached_result()
+        if cached_result is not None:
+            self.status = TaskStatus.COMPLETED
+            self.result = cached_result
+            return cached_result
+
         start_time = time.time()
         result = None
         
@@ -220,10 +315,20 @@ class Task(ABC):
                 if result.success or self.retries > self.max_retry:
                     break
 
-            if self.retries > 1:
+            if result and self.retries > 1:
                 result.retries = self.retries
 
-            return result
+            # Cache successful result
+            if result and result.success:
+                await self.cache_result(result)
+
+            return result if result else TaskResult(
+                success=False,
+                output={},
+                error=RuntimeError("Task execution failed"),
+                execution_time=time.time() - start_time,
+                progress=self._current_progress
+            )
 
         try:
             while self.retries <= self.max_retry:
@@ -233,10 +338,20 @@ class Task(ABC):
                 if result.success or self.retries > self.max_retry:
                     break
 
-            if self.retries > 1:
+            if result and self.retries > 1:
                 result.retries = self.retries
 
-            return result
+            # Cache successful result
+            if result and result.success:
+                await self.cache_result(result)
+
+            return result if result else TaskResult(
+                success=False,
+                output={},
+                error=RuntimeError("Task execution failed"),
+                execution_time=time.time() - start_time,
+                progress=self._current_progress
+            )
         except asyncio.TimeoutError:
             self.logger.error(f"Task {self.name} timed out after {self.timeout} seconds")
             return TaskResult(

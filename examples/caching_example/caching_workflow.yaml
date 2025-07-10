@@ -1,0 +1,40 @@
+name: "caching_workflow_demo"
+
+tasks:
+  # Task with caching enabled and custom TTL
+  expensive_computation:
+    type: "slow_computation"
+    config:
+      input_value: 100
+      computation_time: 3.0
+    cache_enabled: true
+    cache_ttl: 300  # 5 minutes in seconds
+    
+  # Task that depends on cached result
+  data_processing:
+    type: "data_processing"
+    config:
+      processing_time: 1.0
+    dependencies:
+      - expensive_computation
+    cache_enabled: true
+    cache_ttl: 600  # 10 minutes
+    
+  # Task with caching disabled
+  real_time_task:
+    type: "slow_computation"
+    config:
+      input_value: 50
+      computation_time: 1.0
+    cache_enabled: false
+    
+  # Task with default cache settings (disabled by default)
+  simple_task:
+    type: "slow_computation"
+    config:
+      input_value: 25
+      computation_time: 0.5
+
+dependencies:
+  data_processing:
+    - expensive_computation 

@@ -1,12 +1,13 @@
 from typing import Dict, List, Any, Callable, Optional, Set
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 import time
 import asyncio
 from ..models.task_result import TaskResult, StreamingTaskResult, StreamingYielder, TaskProgress
 from ..models.task_group import TaskGroupConfig, TaskGroup, StreamingTaskGroup
 from .task import Task, TaskStatus, StreamingTask
 from .registry import TaskRegistry
+from ..cache import CacheInterface, MemoryCache
 
 class Workflow:
     """
@@ -35,6 +36,8 @@ class Workflow:
         self._progress_callbacks: List[Callable[[str, TaskProgress], None]] = []
         self._workflow_progress: Dict[str, TaskProgress] = {}
         self._progress_enabled = True
+        self._cache: Optional[CacheInterface] = None
+        self._cache_enabled = False
 
     def add_task(self, task: Task) -> None:
         """
@@ -53,6 +56,11 @@ class Workflow:
         if self._progress_enabled:
             task_name = task.name  # Capture the task name to avoid closure issues
             task.add_progress_callback(lambda progress, name=task_name: self._on_task_progress(name, progress))
+        
+        # Set up caching if enabled
+        if self._cache_enabled and self._cache:
+            task.set_cache(self._cache)
+            task.set_cache_enabled(True)
 
     def add_task_group(self, name: str, config: TaskGroupConfig) -> None:
         if name in self.task_groups:
@@ -537,4 +545,60 @@ class Workflow:
             total=total_tasks,
             message=f"{completed_tasks}/{total_tasks} tasks completed",
             percentage=overall_percentage
-        ) 
+        )
+    
+    def set_cache(self, cache: CacheInterface) -> None:
+        """Set the cache interface for this workflow and all its tasks.
+        
+        Args:
+            cache: The cache interface to use
+        """
+        self._cache = cache
+        for task in self.tasks.values():
+            task.set_cache(cache)
+    
+    def set_cache_enabled(self, enabled: bool) -> None:
+        """Enable or disable caching for this workflow and all its tasks.
+        
+        Args:
+            enabled: Whether to enable caching
+        """
+        self._cache_enabled = enabled
+        for task in self.tasks.values():
+            task.set_cache_enabled(enabled)
+    
+    def enable_memory_cache(self, max_size: int = 1000, default_ttl: Optional[timedelta] = None) -> None:
+        """Enable memory caching for this workflow.
+        
+        Args:
+            max_size: Maximum number of entries to cache
+            default_ttl: Default time to live for cache entries
+        """
+        cache = MemoryCache(max_size=max_size, default_ttl=default_ttl)
+        self.set_cache(cache)
+        self.set_cache_enabled(True)
+    
+    async def clear_cache(self) -> None:
+        """Clear all cached results for this workflow."""
+        if self._cache:
+            await self._cache.clear()
+    
+    async def get_cache_stats(self) -> Optional[Dict[str, Any]]:
+        """Get cache statistics for this workflow.
+        
+        Returns:
+            Dictionary containing cache statistics or None if no cache is configured
+        """
+        if self._cache:
+            return await self._cache.get_stats()
+        return None
+    
+    async def cleanup_expired_cache(self) -> int:
+        """Remove expired cache entries.
+        
+        Returns:
+            Number of entries removed
+        """
+        if self._cache:
+            return await self._cache.cleanup_expired()
+        return 0 

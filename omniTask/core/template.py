@@ -76,6 +76,21 @@ class WorkflowTemplate:
                 
             if 'progress_tracking' in task_config:
                 config['progress_tracking'] = task_config['progress_tracking']
+            
+            # Handle cache configuration
+            if 'cache_enabled' in task_config:
+                cache_enabled = task_config['cache_enabled']
+                if isinstance(cache_enabled, bool):
+                    config['cache_enabled'] = cache_enabled
+                else:
+                    raise ValueError(f"cache_enabled must be a boolean, got {cache_enabled}")
+            
+            if 'cache_ttl' in task_config:
+                cache_ttl = task_config['cache_ttl']
+                if isinstance(cache_ttl, (int, float)) and cache_ttl > 0:
+                    config['cache_ttl'] = cache_ttl
+                else:
+                    raise ValueError(f"cache_ttl must be a positive number, got {cache_ttl}")
 
             task = workflow.create_task(task_type, task_name, config)
 
