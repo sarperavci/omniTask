@@ -3,6 +3,8 @@ import yaml
 import json
 import os
 from pathlib import Path
+from datetime import timedelta
+from ..cache import FileCache
 from .workflow import Workflow
 from .registry import TaskRegistry
 from ..models.task_group import TaskGroupConfig
@@ -37,6 +39,52 @@ class WorkflowTemplate:
         else:
             raise ValueError("Condition must be a string or dict")
 
+    def _configure_cache(self, workflow: Workflow, cache_config: Dict[str, Any]) -> None:
+        cache_type = cache_config.get('type', 'memory')
+        
+        if cache_type == 'memory':
+            max_size = cache_config.get('max_size', 1000)
+            default_ttl = cache_config.get('default_ttl')
+            if default_ttl:
+                default_ttl = timedelta(seconds=default_ttl)
+            workflow.enable_memory_cache(max_size=max_size, default_ttl=default_ttl)
+            
+        elif cache_type == 'redis':
+            host = cache_config.get('host', 'localhost')
+            port = cache_config.get('port', 6379)
+            db = cache_config.get('db', 0)
+            password = cache_config.get('password')
+            key_prefix = cache_config.get('key_prefix', 'omnitask:')
+            max_connections = cache_config.get('max_connections', 10)
+            
+            default_ttl = cache_config.get('default_ttl')
+            if default_ttl:
+                default_ttl = timedelta(seconds=default_ttl)
+            
+            workflow.enable_redis_cache(
+                host=host,
+                port=port,
+                db=db,
+                password=password,
+                default_ttl=default_ttl,
+                key_prefix=key_prefix,
+                max_connections=max_connections
+            )
+            
+        elif cache_type == 'file':
+            cache_dir = cache_config.get('cache_dir', '.omnitask_cache')
+            default_ttl = cache_config.get('default_ttl')
+            if default_ttl:
+                default_ttl = timedelta(seconds=default_ttl)
+            
+            
+            cache = FileCache(cache_dir=cache_dir, default_ttl=default_ttl)
+            workflow.set_cache(cache)
+            workflow.set_cache_enabled(True)
+            
+        else:
+            raise ValueError(f"Unsupported cache type: {cache_type}")
+
     def create_workflow(self, registry: Optional[TaskRegistry] = None) -> Workflow:
         if not isinstance(self.template_data, dict):
             raise ValueError("Invalid template format: root must be a dictionary")
@@ -48,6 +96,10 @@ class WorkflowTemplate:
         workflow = Workflow(workflow_name, registry or TaskRegistry())
         tasks = self.template_data.get('tasks', {})
         global_dependencies = self.template_data.get('dependencies', {})
+        
+        cache_config = self.template_data.get('cache', {})
+        if cache_config:
+            self._configure_cache(workflow, cache_config)
 
         for task_name, task_config in tasks.items():
             if not isinstance(task_config, dict):
@@ -106,9 +158,15 @@ class WorkflowTemplate:
                 if dep in tasks and 'for_each' in tasks[dep]:
                     if dep not in workflow.task_groups:
                         group_config = tasks[dep]
+                        group_type = group_config.get('type')
+                        group_for_each = group_config.get('for_each')
+                        
+                        if not group_type or not group_for_each:
+                            raise ValueError(f"Task group {dep} must specify both 'type' and 'for_each'")
+                        
                         group = TaskGroupConfig(
-                            type=group_config.get('type'),
-                            for_each=group_config.get('for_each'),
+                            type=group_type,
+                            for_each=group_for_each,
                             config_template=group_config.get('config_template', {}),
                             max_concurrent=group_config.get('max_concurrent', 10),
                             error_handling=group_config.get('error_handling'),
@@ -128,9 +186,15 @@ class WorkflowTemplate:
                 if not isinstance(group_config.get('for_each'), str):
                     raise ValueError(f"Task group {group_name} must specify a valid for_each path")
 
+                group_type = group_config.get('type')
+                group_for_each = group_config.get('for_each')
+                
+                if not group_type or not group_for_each:
+                    raise ValueError(f"Task group {group_name} must specify both 'type' and 'for_each'")
+                
                 group = TaskGroupConfig(
-                    type=group_config.get('type'),
-                    for_each=group_config.get('for_each'),
+                    type=group_type,
+                    for_each=group_for_each,
                     config_template=group_config.get('config_template', {}),
                     max_concurrent=group_config.get('max_concurrent', 10),
                     error_handling=group_config.get('error_handling'),

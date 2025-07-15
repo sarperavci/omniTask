@@ -1,0 +1,54 @@
+name: redis_cached_workflow
+
+cache:
+  type: redis
+  host: localhost
+  port: 6379
+  db: 0
+  password: null
+  default_ttl: 300
+  key_prefix: "demo:"
+  max_connections: 5
+
+tasks:
+  data_loader:
+    type: file_reader
+    config:
+      file_path: "data.csv"
+    cache_enabled: true
+    cache_ttl: 600
+
+  data_processor:
+    type: data_processor
+    config:
+      operation: "aggregate"
+      batch_size: 1000
+    dependencies:
+      - data_loader
+    cache_enabled: true
+    cache_ttl: 300
+
+  result_analyzer:
+    type: result_analyzer
+    config:
+      metrics: ["mean", "median", "std"]
+    dependencies:
+      - data_processor
+    cache_enabled: true
+
+  report_generator:
+    type: report_generator
+    config:
+      format: "html"
+      template: "default"
+    dependencies:
+      - result_analyzer
+    cache_enabled: false
+
+dependencies:
+  data_processor:
+    - data_loader
+  result_analyzer:
+    - data_processor
+  report_generator:
+    - result_analyzer 

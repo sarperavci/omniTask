@@ -11,7 +11,7 @@ OmniTask is a modern workflow automation engine that allows you to build complex
 - **Pure Python**: Built entirely in Python with no external dependencies beyond PyYAML
 - **Async/Await Support**: Full asynchronous execution for maximum performance
 - **Streaming Tasks**: Real-time data processing with streaming capabilities
-- **Intelligent Caching**: Memory and file-based caching for optimized performance
+- **Intelligent Caching**: Memory, file-based, and Redis distributed caching for optimized performance
 - **Dependency Management**: Automatic dependency resolution and execution ordering
 - **Task Groups**: Parallel execution with configurable concurrency limits
 - **Conditional Execution**: Execute tasks based on conditions and previous results
@@ -139,6 +139,7 @@ Explore our comprehensive examples:
 - **[Streaming Processing](examples/streaming-example/)** - Real-time data processing
 - **[Conditional Logic](examples/conditional_workflow/)** - Decision-based execution
 - **[Caching Demo](examples/caching_example/)** - Performance optimization
+- **[Redis Cache](examples/redis_cache_example/)** - Distributed caching with Redis
 - **[Parallel Processing](examples/mock-bounty/)** - Concurrent task execution
 
 ## License

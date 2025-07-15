@@ -578,6 +578,27 @@ class Workflow:
         self.set_cache(cache)
         self.set_cache_enabled(True)
     
+    def enable_redis_cache(self, 
+                          host: str = "localhost", 
+                          port: int = 6379, 
+                          db: int = 0, 
+                          password: Optional[str] = None,
+                          default_ttl: Optional[timedelta] = None,
+                          key_prefix: str = "omnitask:",
+                          max_connections: int = 10) -> None:
+        from ..cache import RedisCache
+        cache = RedisCache(
+            host=host,
+            port=port,
+            db=db,
+            password=password,
+            default_ttl=default_ttl,
+            key_prefix=key_prefix,
+            max_connections=max_connections
+        )
+        self.set_cache(cache)
+        self.set_cache_enabled(True)
+    
     async def clear_cache(self) -> None:
         """Clear all cached results for this workflow."""
         if self._cache:
