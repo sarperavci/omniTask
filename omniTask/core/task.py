@@ -38,6 +38,15 @@ class Task(ABC):
     default_timeout: Optional[float] = None
     default_max_retry: Optional[int] = 0
 
+    @classmethod
+    def install(cls) -> None:
+        """
+        Optional class method to install or set up external dependencies for the task.
+        This method is called once per task class by the TaskRegistry upon registration.
+        It can be used to install tools, download data, or perform any one-time setup.
+        """
+        pass
+
     def __init__(self, name: str, config: Dict[str, Any] = None):
         if not self.task_name:
             raise ValueError(f"Task class {self.__class__.__name__} must define task_name")

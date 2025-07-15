@@ -12,7 +12,7 @@ from urllib.request import urlopen
 from urllib.error import URLError
 from pathlib import Path
 
-from omniTask.models.task_result import TaskResult
+from ..models.task_result import TaskResult
 from .task import Task
 
 class TaskRegistry:
@@ -26,11 +26,14 @@ class TaskRegistry:
     - Creating task instances with proper configuration
     """
 
-    def __init__(self):
+    def __init__(self, status_dir: str = ".omnitask_cache/install_status"):
         """Initialize a new task registry."""
         self._tasks: Dict[str, Type[Task]] = {}
         self._functions: Dict[str, Callable] = {}
         self.logger = logging.getLogger("registry")
+        self.status_dir = Path(status_dir)
+        # Ensure the directory for installation status files exists
+        self.status_dir.mkdir(parents=True, exist_ok=True)
 
     def _install_library_dependencies(self, task_class: Type[Task]) -> None:
         """
@@ -70,6 +73,19 @@ class TaskRegistry:
             raise ValueError(f"Class {task_class.__name__} must inherit from Task")
         if not task_class.task_name:
             raise ValueError(f"Task class {task_class.__name__} must define task_name")
+        
+        status_file = self.status_dir / f"{task_class.task_name}.installed"
+
+        if not status_file.exists():
+            if task_class.install != Task.install:
+                self.logger.info(f"Running one-time installation for task class: {task_class.task_name}")
+                try:
+                    task_class.install()
+                    self.logger.info(f"Installation for {task_class.task_name} completed successfully.")
+                    status_file.touch()
+                except Exception as e:
+                    self.logger.error(f"Installation for {task_class.task_name} failed: {e}")
+                    raise RuntimeError(f"Installation for task class {task_class.task_name} failed.") from e
         
         self._install_library_dependencies(task_class)
         self._tasks[task_class.task_name] = task_class
